@@ -1,0 +1,53 @@
+diff -Naur A/core/arch/arm/plat-imx/conf.mk B/core/arch/arm/plat-imx/conf.mk
+--- A/core/arch/arm/plat-imx/conf.mk	2024-11-15 17:11:57.620988562 +0530
++++ B/core/arch/arm/plat-imx/conf.mk	2024-11-15 17:08:33.005606280 +0530
+@@ -71,7 +71,13 @@
+ 
+ mx8mp-flavorlist = \
+ 	mx8mpevk \
+-	mx8mp_rsb3720_6g
++	mx8mp_rsb3720_6g \
++       mx8mp_rsb3720_6g \
++       mx8mp_iwg40m_1gb \
++       mx8mp_iwg40m_2gb \
++       mx8mpiwg \
++       mx8mp_iwg40m_8gb
++
+ 
+ mx8qm-flavorlist = \
+ 	mx8qmmek \
+@@ -407,6 +413,34 @@
+ $(call force,CFG_CORE_LARGE_PHYS_ADDR,y)
+ $(call force,CFG_CORE_ARM64_PA_BITS,36)
+ endif
++
++ifneq (,$(filter $(PLATFORM_FLAVOR),mx8mp_iwg40m_1gb))
++CFG_DDR_SIZE ?= UL(0x40000000)
++CFG_UART_BASE ?= UART4_BASE
++$(call force,CFG_CORE_LARGE_PHYS_ADDR,y)
++$(call force,CFG_CORE_ARM64_PA_BITS,36)
++endif
++
++ifneq (,$(filter $(PLATFORM_FLAVOR),mx8mp_iwg40m_2gb))
++CFG_DDR_SIZE ?= UL(0x80000000)
++CFG_UART_BASE ?= UART4_BASE
++$(call force,CFG_CORE_LARGE_PHYS_ADDR,y)
++$(call force,CFG_CORE_ARM64_PA_BITS,36)
++endif
++
++ifneq (,$(filter $(PLATFORM_FLAVOR),mx8mpiwg))
++CFG_DDR_SIZE ?= UL(0x100000000)
++CFG_UART_BASE ?= UART4_BASE
++$(call force,CFG_CORE_LARGE_PHYS_ADDR,y)
++$(call force,CFG_CORE_ARM64_PA_BITS,36)
++endif
++
++ifneq (,$(filter $(PLATFORM_FLAVOR),mx8mp_iwg40m_8gb))
++CFG_DDR_SIZE ?= UL(0x200000000)
++CFG_UART_BASE ?= UART4_BASE
++$(call force,CFG_CORE_LARGE_PHYS_ADDR,y)
++$(call force,CFG_CORE_ARM64_PA_BITS,36)
++endif
+ 
+ ifneq (,$(filter $(PLATFORM_FLAVOR),mx8qxpmek mx8qmmek))
+ CFG_DDR_SIZE ?= 0x80000000

@@ -1,0 +1,144 @@
+diff -Naur A/configs/board/imx8mpiwg.conf B/configs/board/imx8mpiwg.conf
+--- A/configs/board/imx8mpiwg.conf	1970-01-01 05:30:00.000000000 +0530
++++ B/configs/board/imx8mpiwg.conf	2024-12-18 13:15:26.857478949 +0530
+@@ -0,0 +1,17 @@
++# [general]
++
++machine=imx8mpiwg
++
++
++UBOOT_CONFIG="imx8mp_iwg40m_osm_4gb_defconfig imx8mp_iwg40m_osm_2gb_defconfig"
++
++BOARD_VARIANTS="lpddr4 ddr4"
++
++COMPOSITE_IMG1_FILE_sd_ddr4="bsp/imx-mkimage/imx8mpiwg/flash-ddr4.bin"
++
++COMPOSITE_IMG1_FILE_sd_lpddr4="bsp/imx-mkimage/imx8mpiwg/flash-lpddr4.bin"
++
++# distro boot script
++distro_bootscript="bsp/u-boot/imx8mpiwg/imx8mpiwg_boot.scr"
++
++
+diff -Naur A/configs/debian/debian_desktop_arm64.yaml B/configs/debian/debian_desktop_arm64.yaml
+--- A/configs/debian/debian_desktop_arm64.yaml	2024-12-18 13:14:07.640850932 +0530
++++ B/configs/debian/debian_desktop_arm64.yaml	2024-12-18 13:14:38.683496970 +0530
+@@ -93,6 +93,7 @@
+     - mesa-utils
+     - alsa-utils
+     - dmz-cursor-theme
++    - can-utils
+   setup-hooks:
+       # Setup NXP board-specific configurations for various platforms
+     - 'mkdir -p $1/usr/local/bin'
+@@ -124,7 +125,9 @@
+     - 'chroot "$1" ln -s /sbin/init /init'
+     - 'chroot "$1" ln -s /boot/modules /lib/modules'
+     - 'chroot "$1" rm -rf /lib/firmware'
+-    - 'chroot "$1" ln -s /boot/firmware /lib/firmware'
++    - 'chroot "$1" rm -rf /lib/modules'
++    - 'cp -r build_lsdk2406/bsp/imx_firmware/lib/firmware/ $1/lib/'
++    - 'cp -r build_lsdk2406/linux/kernel/arm64/IMX/output/lf-6.6.3-1.0.0/tmp/lib/modules/ $1/lib/'
+     - 'cp src/apps/graphics/gpuconfig $1/etc/'
+     - 'cp src/apps/graphics/gpuconfig.service $1/lib/systemd/system/'
+     - 'chroot "$1" ln -s /lib/systemd/system/gpuconfig.service /etc/systemd/system/graphical.target.wants/gpuconfig.service'
+diff -Naur A/configs/sdk.yml B/configs/sdk.yml
+--- A/configs/sdk.yml	2024-12-18 13:14:07.640850932 +0530
++++ B/configs/sdk.yml	2024-12-18 13:19:22.229981578 +0530
+@@ -40,7 +40,7 @@
+ 
+ CONFIG_OPTEE: y
+ 
+-INSTALL_DESKTOP_TEST_PACKAGES: n
++INSTALL_DESKTOP_TEST_PACKAGES: y
+ 
+ # user can customize the default path of components source and build output path
+ DEFAULT_OUT_PATH: $FBDIR/build_${DISTRIB_VERSION}
+@@ -50,7 +50,7 @@
+ # default build options for CI auto build
+ BUILD:
+   DEBIAN_BASE: n
+-  DEBIAN_SERVER: y
++  DEBIAN_SERVER: n
+   DEBIAN_DESKTOP: y
+   YOCTO_RFS: n
+   BUILDROOT_RFS: n
+@@ -59,7 +59,7 @@
+ # default kernel config list
+ KERNEL_CONFIG:
+   ARM64_LS:  "defconfig lsdk.config"
+-  ARM64_IMX: "defconfig imx.config imx_v8_defconfig"
++  ARM64_IMX: "defconfig imx.config iw_rainbowg40m_defconfig"
+   ARM32_LS:  "multi_v7_defconfig multi_v7_lpae.config lsdk.config"
+   ARM32_IMX: "imx_v7_defconfig"
+ 
+diff -Naur A/src/apps/multimedia/imx_dsp_codec_ext.mk B/src/apps/multimedia/imx_dsp_codec_ext.mk
+--- A/src/apps/multimedia/imx_dsp_codec_ext.mk	2024-12-18 13:14:07.642850974 +0530
++++ B/src/apps/multimedia/imx_dsp_codec_ext.mk	2024-12-18 13:14:39.596515809 +0530
+@@ -10,6 +10,8 @@
+   EXTRA_CONF = --enable-imx8m
+ else ifeq ($(MACHINE),imx8mpevk)
+   EXTRA_CONF = --enable-imx8m
++else ifeq ($(MACHINE),imx8mpiwg)
++  EXTRA_CONF = --enable-imx8m
+ else ifeq ($(MACHINE),imx8ulpevk)
+   EXTRA_CONF = --enable-imx8ulp
+ else ifeq ($(MACHINE),imx8qxpmek)
+diff -Naur A/src/apps/multimedia/imx_dsp.mk B/src/apps/multimedia/imx_dsp.mk
+--- A/src/apps/multimedia/imx_dsp.mk	2024-12-18 13:14:07.642850974 +0530
++++ B/src/apps/multimedia/imx_dsp.mk	2024-12-18 13:14:39.067504895 +0530
+@@ -10,6 +10,8 @@
+   HIFI4_PLATFORM = imx8mp
+ else ifeq ($(MACHINE),imx8mpevk)
+   HIFI4_PLATFORM = imx8mp
++else ifeq ($(MACHINE),imx8mpiwg)
++  HIFI4_PLATFORM = imx8mp
+ else ifeq ($(MACHINE),imx8ulpevk)
+   HIFI4_PLATFORM = imx8ulp
+ else
+diff -Naur A/src/bsp/imx_mkimage.mk B/src/bsp/imx_mkimage.mk
+--- A/src/bsp/imx_mkimage.mk	2024-12-18 13:14:07.643850995 +0530
++++ B/src/bsp/imx_mkimage.mk	2024-12-18 13:14:39.010503719 +0530
+@@ -34,8 +34,10 @@
+     \
+     if echo $1 | grep -qE ^imx8mp_ddr4_evk; then \
+ 	SOC=iMX8MP; SOC_FAMILY=iMX8M; target=flash_ddr4_evk; \
+-    elif echo $1 | grep -qE ^imx8mp_evk; then \
+-	SOC=iMX8MP; SOC_FAMILY=iMX8M; target=flash_evk; \
++    elif echo $1 | grep -qE ^imx8mp_iwg40m_osm_2gb; then \
++	SOC=iMX8MP; SOC_FAMILY=iMX8M; target=flash_iwg_2gb; \
++    elif echo $1 | grep -qE ^imx8mp_iwg40m_osm_4gb; then \
++        SOC=iMX8MP; SOC_FAMILY=iMX8M; target=flash_iwg; \
+     elif echo $1 | grep -qE ^imx8mm_ddr4_evk; then \
+ 	SOC=iMX8MM; SOC_FAMILY=iMX8M; target=flash_ddr4_evk; \
+     elif echo $1 | grep -qE ^imx8mm_evk; then \
+@@ -98,12 +100,15 @@
+     \
+     $(MAKE) SOC=$$SOC $$REV_OPTION $$target && \
+     mkdir -p $(FBOUTDIR)/bsp/imx-mkimage/$$brd && \
+-    if [ $(MACHINE) = imx8mpevk -o $(MACHINE) = imx8mnevk -o $(MACHINE) = imx8mmevk -o \
++    if [ $(MACHINE) = imx8mpevk -o $(MACHINE) = imx8mpiwg -o $(MACHINE) = imx8mnevk -o $(MACHINE) = imx8mmevk -o \
+ 	   $(MACHINE) = imx8mqevk ] && [ $$target = flash_ddr4_evk -o $$target = flash_ddr4_val ]; then \
+ 	cp $$SOC_FAMILY/flash.bin $(FBOUTDIR)/bsp/imx-mkimage/$$brd/flash-ddr4.bin; \
+-    elif [ $(MACHINE) = imx8mpevk -o $(MACHINE) = imx8mnevk -o $(MACHINE) = imx8mmevk -o \
+-	   $(MACHINE) = imx8mqevk ] && [ $$target = flash_evk ]; then \
+-	cp $$SOC_FAMILY/flash.bin $(FBOUTDIR)/bsp/imx-mkimage/$$brd/flash-lpddr4.bin; \
++    elif [ $(MACHINE) = imx8mpevk -o $(MACHINE) = imx8mpiwg -o $(MACHINE) = imx8mnevk -o $(MACHINE) = imx8mmevk -o \
++	   $(MACHINE) = imx8mqevk ] && [ $$target = flash_iwg ]; then \
++	cp $$SOC_FAMILY/flash.bin $(FBOUTDIR)/bsp/imx-mkimage/$$brd/flash-lpddr4-4gb.bin; \
++    elif [ $(MACHINE) = imx8mpevk -o $(MACHINE) = imx8mpiwg -o $(MACHINE) = imx8mnevk -o $(MACHINE) = imx8mmevk -o \
++           $(MACHINE) = imx8mqevk ] && [ $$target = flash_iwg_2gb ]; then \
++        cp $$SOC_FAMILY/flash.bin $(FBOUTDIR)/bsp/imx-mkimage/$$brd/flash-lpddr4-2gb.bin; \
+     elif [ $(MACHINE) = imx8ulpevk -a $$target = flash_singleboot ]; then \
+ 	cp $$SOC_FAMILY/flash.bin $(FBOUTDIR)/bsp/imx-mkimage/$$brd/flash-singleboot.bin; \
+     elif [ $(MACHINE) = imx8ulpevk -a $$target = flash_singleboot_m33 ]; then \
+diff -Naur A/tools/flex-builder B/tools/flex-builder
+--- A/tools/flex-builder	2024-12-18 13:14:07.644851016 +0530
++++ B/tools/flex-builder	2024-12-18 13:14:38.788499137 +0530
+@@ -457,6 +457,7 @@
+ 
+ 	[ -d $localmntdir/boot/modules ] && fbprint_n "Pushing modules to target $2 ..." && \
+ 	cp -rf $KERNEL_OUTPUT_PATH/$curbrch/tmp/lib/modules/* $localmntdir/boot/modules/
++	p -rf $KERNEL_OUTPUT_PATH/$curbrch/tmp/lib/modules/* $localmntdir/boot/modules/
+ 	fbprint_d "Push kernel and modules to target $2"
+     elif [ $1 = apps -o $1 = ml ]; then
+ 	[ $1 = ml ] && srcdir=${DESTDIR}_ml || srcdir=$DESTDIR
